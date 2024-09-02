@@ -1,0 +1,66 @@
+version: '4.0'
+
+services:
+  postgres:
+    image: postgres:16.4
+    container_name: postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: alerts
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.4.0
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  crypto-api:
+    build: ./crypto-api
+    container_name: crypto-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./crypto-api/.env
+    volumes:
+      - ./crypto-api:/app
+
+  notifier-api:
+    build: ./notifier-service
+    container_name: notifier-api
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://root:root@postgres/alerts
+    env_file:
+      - ./notifier-service/.env
+    volumes:
+      - ./notifier-service:/app
+    command: ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 8001"]
+
+  notifier-worker:
+    build: ./notifier-service
+    container_name: notifier-worker
+    depends_on:
+      - postgres
+      - redis
+      - notifier-api
+    environment:
+      - DATABASE_URL=postgresql://root:root@postgres/alerts
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    env_file:
+      - ./notifier-service/.env
+    volumes:
+      - ./notifier-service:/app
+    command: ["sh", "-c", "celery -A celery_worker.celery_app worker --loglevel=info & celery -A celery_worker.celery_app beat --loglevel=info"]
+
+volumes:
+  postgres_data:

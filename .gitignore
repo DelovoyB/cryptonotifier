@@ -1,0 +1,8 @@
+/crypto-api/.env
+/notifier-service/.env
+.idea/
+venv/
+**/__pycache__/
+.pylintrc
+.vscode/
+celerybeat-schedule
